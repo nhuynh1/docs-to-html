@@ -1,0 +1,94 @@
+function onOpen() {
+  var ui = DocumentApp.getUi();
+  ui.createMenu('Create HTML Email')
+      .addItem('Convert', 'menuItem1')
+      .addToUi();
+}
+
+function menuItem1() {
+  myFunction();
+}
+
+function myFunction() {
+  var num_children = DocumentApp.getActiveDocument().getBody().getNumChildren();
+  var html = "";
+
+  for (var child=0; child < num_children; child++){
+   html = html + process_child(child);
+  }
+  var d = new Date();
+  var timeStamp = d.getTime();
+  DriveApp.createFile("html" + timeStamp + ".html", html);
+}
+
+function process_child(ch) {
+  var child = DocumentApp.getActiveDocument().getBody().getChild(ch);
+
+  if (child.getType() == DocumentApp.ElementType.PARAGRAPH) {
+    var heading = child.getHeading();
+    var text = child.getText();
+    var html = "";
+    var pattern = new RegExp(/^Note\:/);
+
+    if (heading == DocumentApp.ParagraphHeading.HEADING1) {
+      html = html + "<h1>" + text + "</h1>";
+      return html;
+    }
+    else if (pattern.test(text)) {
+      html = html + "<p>" + text + "</p>";
+      return html;
+    }
+    else
+      return "";
+  }
+
+  else if (child.getType() == DocumentApp.ElementType.LIST_ITEM) {
+    var words = child.editAsText();
+    var text = child.getText();
+    var newUrl = "";
+    var beginOffSet = null;
+    var endOffSet = null;
+    var html = "<ul><li>";
+
+
+
+    for (var char=0; char < text.length; char++) {
+      //check to see if there is a hyperlink at character char
+      var url = words.getLinkUrl(char);
+
+      if (url === newUrl && char < text.length - 1) {
+      //do nothing
+      }
+
+      else if (url == null && char > beginOffSet && beginOffSet != null) {
+        //found end of text with hyperlinking, end hyperlinked text to html
+        endOffSet = char;
+        var urlText = text.substring(beginOffSet, endOffSet);
+        html = html + urlText + '</a>' + text.charAt(char);
+        beginOffSet = null;
+        endOffSet = null;
+      }
+      else if ((char == text.length - 1) && url != null) {
+        endOffSet = char;
+        var urlText = text.substring(beginOffSet, endOffSet + 1);
+        html = html + urlText + '</a>';
+        beginOffSet = null;
+        endOffSet = null;
+      }
+      else if (url == null) {
+       //just add characters to html
+        html = html + text.charAt(char);
+      }
+      else {
+        //found beginning of text with hyperlink, start hyperlinked text to html
+        beginOffSet = char;
+        newUrl = url;
+        html = html + '<a href="' + url + '">';
+      }
+    }
+    //return html
+    return html + '</li></ul>';
+  }
+  else
+    return "";
+}
