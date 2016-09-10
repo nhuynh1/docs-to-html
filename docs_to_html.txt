@@ -1,3 +1,7 @@
+//global variables
+var firstHeading = true;
+var folderID = 'FOLDER_ID'
+
 function onOpen() {
   var ui = DocumentApp.getUi();
   ui.createMenu('Create HTML Email')
@@ -9,16 +13,53 @@ function menuItem1() {
   myFunction();
 }
 
+function getHtml(textFileName) {
+  var allFilesInFolder,cntFiles,docBlob,docContent,fileNameToGet,fldr,
+    thisFile,whatFldrIdToUse;
+
+  whatFldrIdToUse = folderID;
+  fileNameToGet = textFileName; //Assign the name of the file to get to a variable
+
+  Logger.log(fileNameToGet);
+
+  //Get a reference to the folder
+  fldr = DriveApp.getFolderById(whatFldrIdToUse);
+  //Get a reference to the file
+  allFilesInFolder = fldr.getFilesByName(fileNameToGet);
+
+  if (allFilesInFolder.hasNext() === false) {
+  //If no file is found, the user gave a non-existent file name
+  return false;
+  }
+
+  cntFiles = 0;
+  //Even if it's only one file, must iterate a while loop in order to access the file.
+  //Google drive will allow multiple files of the same name.
+  while (allFilesInFolder.hasNext()) {
+    thisFile = allFilesInFolder.next();
+    cntFiles = cntFiles + 1;
+    //Logger.log('File Count: ' + cntFiles);
+
+    docBlob = thisFile.getAs('text/plain');
+    docContent = docBlob.getDataAsString();
+    return docContent;
+    //Logger.log('docContent : ' + docContent );
+  }
+
+}// getHTML()
+
 function myFunction() {
   var num_children = DocumentApp.getActiveDocument().getBody().getNumChildren();
-  var html = "";
+  //var html = "<html><body>";
+  var html = getHtml('html.txt');
 
   for (var child=0; child < num_children; child++){
    html = html + process_child(child);
   }
   var d = new Date();
   var timeStamp = d.getTime();
-  DriveApp.createFile("html" + timeStamp + ".html", html);
+  html = html + getHtml('html_end.txt');
+  DriveApp.getFolderById(folderID).createFile("html" + timeStamp + ".html", html);
 }
 
 function process_child(ch) {
@@ -28,14 +69,15 @@ function process_child(ch) {
     var heading = child.getHeading();
     var text = child.getText();
     var html = "";
-    var pattern = new RegExp(/^Note\:/);
+    var pattern = new RegExp(/^Note\:/); //need to process hyperlinks in notes
 
     if (heading == DocumentApp.ParagraphHeading.HEADING1) {
-      html = html + "<h1>" + text + "</h1>";
+
+      html = html + '<h1>' + text + '</h1>';
       return html;
     }
     else if (pattern.test(text)) {
-      html = html + "<p>" + text + "</p>";
+      html = html + '<p style="font-weight:300i;font-style:italic;margin-left:15px;">' + text + '</p>';
       return html;
     }
     else
@@ -48,7 +90,9 @@ function process_child(ch) {
     var newUrl = "";
     var beginOffSet = null;
     var endOffSet = null;
-    var html = "<ul><li>";
+    var textBeginOffSet = null;
+    var textEndOffSet = null;
+    var html = "<p>";
 
 
 
@@ -66,6 +110,7 @@ function process_child(ch) {
         var urlText = text.substring(beginOffSet, endOffSet);
         html = html + urlText + '</a>' + text.charAt(char);
         beginOffSet = null;
+        textBeginOffSet = endOffSet;
         endOffSet = null;
       }
       else if ((char == text.length - 1) && url != null) {
@@ -75,19 +120,31 @@ function process_child(ch) {
         beginOffSet = null;
         endOffSet = null;
       }
-      else if (url == null) {
+      else if (url == null && textBeginOffSet == null) {
        //just add characters to html
-        html = html + text.charAt(char);
+        //html = html + text.charAt(char);
+        textBeginOffSet = char;
       }
-      else {
+      else if (url == null && char == text.length - 1 && textBeginOffSet != null) {
+        textEndOffSet = char;
+        var nonUrlText = text.substring(textBeginOffSet, textEndOffSet + 1);
+        textBeginOffSet = null;
+        textEndOffSet = null;
+        html = html + nonUrlText;
+      }
+      else if (url != null){
         //found beginning of text with hyperlink, start hyperlinked text to html
         beginOffSet = char;
+        textEndOffSet = char;
         newUrl = url;
-        html = html + '<a href="' + url + '">';
+        var nonUrlText = text.substring(textBeginOffSet, textEndOffSet);
+        textBeginOffSet = null;
+        textEndOffSet = null;
+        html = html + nonUrlText +'<a href="' + url + '">';
       }
     }
     //return html
-    return html + '</li></ul>';
+    return html + '</p>';
   }
   else
     return "";
